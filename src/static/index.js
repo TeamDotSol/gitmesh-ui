@@ -10,13 +10,13 @@ var app = Elm.Main.embed( document.getElementById( 'main' ) );
 // initialize ipfs
 var ipfs = ipfsAPI({ host: 'localhost', port: '5001', protocol: 'http' });
 
-app.ports.ipfsCat.subscribe(function (hash) {
-    ipfs.files.cat(hash, function (err, file) {
+app.ports.ipfsList.subscribe(function (hash) {
+    ipfs.ls(hash, function (err, objs) {
         if (err) {
-            console.error(err);
+            console.error(hash, err);
             return;
         }
 
-        console.log(file.toString('utf-8'));
+        app.ports.ipfsListData.send(objs);
     })
 });

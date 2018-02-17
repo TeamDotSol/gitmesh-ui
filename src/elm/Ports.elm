@@ -1,7 +1,9 @@
 port module Ports exposing (..)
 
+import Json.Decode exposing (Value)
 
-port ipfsCat : String -> Cmd msg
+
+port ipfsList : String -> Cmd msg
 
 
-port ipfsData : (String -> msg) -> Sub msg
+port ipfsListData : (Value -> msg) -> Sub msg

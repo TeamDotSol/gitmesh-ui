@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Element exposing (..)
 import Html exposing (Html)
+import Json.Decode as Decode
 import Ports
 import Style exposing (..)
 import Style.Border as Border
@@ -19,7 +20,7 @@ main =
 
 type alias Model =
     { ipfsHash : Maybe String
-    , data : Maybe String
+    , data : Maybe (List IpfsObject)
     }
 
 
@@ -29,27 +30,72 @@ init =
       , data = Nothing
       }
     , Cmd.batch
-        [ Ports.ipfsCat "QmWwdX8shph24fZw3Rtyr3ucobmBQEzqoW8YrnNgUf6H4J"
+        [ Ports.ipfsList "QmaQZJXMyAcakZrgEmAKdwpMa5V9uzNL1vwZnchUHzbSR5"
         ]
     )
 
 
+type IpfsType
+    = File
+    | Directory
+
+
+type alias IpfsObject =
+    { depth : Int
+    , name : String
+    , path : String
+    , size : Int
+    , hash : String
+    , nodeType : IpfsType
+    }
+
+
 type Msg
-    = IPFSData String
+    = IpfsList (Result String (List IpfsObject))
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        IPFSData data ->
-            { model | data = Just data } ! []
+        IpfsList (Ok result) ->
+            { model | data = Just result } ! []
+
+        _ ->
+            model ! []
+
+
+decodeIpfsObject : Decode.Decoder IpfsObject
+decodeIpfsObject =
+    let
+        decodeType : String -> Decode.Decoder IpfsType
+        decodeType raw =
+            case raw of
+                "file" ->
+                    Decode.succeed File
+
+                "dir" ->
+                    Decode.succeed Directory
+
+                _ ->
+                    Decode.fail "unknown ipfs object type"
+    in
+        Decode.map6 IpfsObject
+            (Decode.field "depth" Decode.int)
+            (Decode.field "name" Decode.string)
+            (Decode.field "path" Decode.string)
+            (Decode.field "size" Decode.int)
+            (Decode.field "hash" Decode.string)
+            (Decode.field "type" (Decode.string |> Decode.andThen decodeType))
+
+
+decodeListResult : Decode.Value -> Result String (List IpfsObject)
+decodeListResult =
+    Decode.decodeValue <| Decode.list decodeIpfsObject
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ Ports.ipfsData IPFSData
-        ]
+subscriptions _ =
+    Ports.ipfsListData (decodeListResult >> IpfsList)
 
 
 type Style
