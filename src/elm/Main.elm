@@ -2,48 +2,54 @@ module Main exposing (..)
 
 import Element exposing (..)
 import Html exposing (Html)
+import Ports
 import Style exposing (..)
 import Style.Border as Border
 
 
--- APP
-
-
 main : Program Never Model Msg
 main =
-    Html.beginnerProgram { model = model, view = view, update = update }
-
-
-
--- MODEL
+    Html.program
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
 
 
 type alias Model =
-    Int
+    { ipfsHash : Maybe String
+    , data : Maybe String
+    }
 
 
-model : Model
-model =
-    0
-
-
-
--- UPDATE
+init : ( Model, Cmd Msg )
+init =
+    ( { ipfsHash = Nothing
+      , data = Nothing
+      }
+    , Cmd.batch
+        [ Ports.ipfsCat "QmWwdX8shph24fZw3Rtyr3ucobmBQEzqoW8YrnNgUf6H4J"
+        ]
+    )
 
 
 type Msg
-    = NoOp
-    | Increment
+    = IPFSData String
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NoOp ->
-            model
+        IPFSData data ->
+            { model | data = Just data } ! []
 
-        Increment ->
-            model + 1
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Ports.ipfsData IPFSData
+        ]
 
 
 type Style
