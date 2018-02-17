@@ -28,9 +28,9 @@ type alias Model =
     { errors : List String
     , org : String
     , repo : String
-    , rootHash : Maybe String
+    , currentPath : List String
     , objects : Maybe (List IpfsObject)
-    , data : Maybe String
+    , content : Maybe String
     , view : View
     }
 
@@ -40,9 +40,9 @@ init =
     ( { errors = []
       , org = "team.sol"
       , repo = "example"
-      , rootHash = Just "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i"
+      , currentPath = [ "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i" ]
       , objects = Nothing
-      , data = Nothing
+      , content = Nothing
       , view = List
       }
     , Cmd.batch
@@ -68,7 +68,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         IpfsListRequest hash ->
-            model ! [ Ports.ipfsList hash ]
+            { model | currentPath = hashComponents hash } ! [ Ports.ipfsList hash ]
 
         IpfsList (Ok result) ->
             { model | objects = Just result, view = List } ! []
@@ -77,16 +77,22 @@ update msg model =
             { model | errors = error :: model.errors } ! []
 
         IpfsCatRequest hash ->
-            model ! [ Ports.ipfsCat hash ]
+            { model | currentPath = hashComponents hash }
+                ! [ Ports.ipfsCat hash ]
 
-        IpfsCat data ->
-            { model | data = Just data, view = Single } ! []
+        IpfsCat content ->
+            { model | content = Just content, view = Single } ! []
 
         Error error ->
             { model | errors = error :: model.errors } ! []
 
         NoOp ->
             model ! []
+
+
+hashComponents : String -> List String
+hashComponents =
+    String.split "/"
 
 
 subscriptions : Model -> Sub Msg
@@ -132,15 +138,24 @@ view model =
                 column None [] <|
                     (flip List.map) model.errors (\err -> el ErrorMessage [] <| text err)
             , h3 Header [] <| text <| viewHeader model.org model.repo
+            , viewPath model.currentPath
             , case model.view of
                 List ->
                     column None [] <|
                         (flip List.map) (withDefaultList model.objects)
-                            (\object -> el None [ objectOnClick object ] <| text object.path)
+                            (\object -> el None [ objectOnClick object ] <| text object.name)
 
                 Single ->
-                    text <| withDefaultString model.data
+                    text <| withDefaultString model.content
             ]
+
+
+viewPath : List String -> Element Style variation Msg
+viewPath path =
+    row None [] <|
+        (List.map (\p -> text p) path
+            |> List.intersperse (text " > ")
+        )
 
 
 viewHeader : String -> String -> String
