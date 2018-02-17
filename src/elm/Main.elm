@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Color
 import Data.Ipfs exposing (..)
 import Element exposing (..)
 import Element.Attributes exposing (..)
@@ -9,6 +10,7 @@ import Json.Decode as Decode
 import Ports
 import Style exposing (..)
 import Style.Border as Border
+import Style.Color as Color
 import Style.Font as Font
 
 
@@ -23,8 +25,10 @@ main =
 
 
 type alias Model =
-    { org : String
+    { errors : List String
+    , org : String
     , repo : String
+    , rootHash : Maybe String
     , objects : Maybe (List IpfsObject)
     , data : Maybe String
     , view : View
@@ -33,15 +37,16 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { org = "team.sol"
+    ( { errors = []
+      , org = "team.sol"
       , repo = "example"
+      , rootHash = Just "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i"
       , objects = Nothing
       , data = Nothing
       , view = List
       }
     , Cmd.batch
-        [ Ports.ipfsList "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i"
-        ]
+        [ Ports.ipfsList "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i" ]
     )
 
 
@@ -51,17 +56,25 @@ type View
 
 
 type Msg
-    = IpfsList (Result String (List IpfsObject))
+    = IpfsListRequest String
+    | IpfsList (Result String (List IpfsObject))
     | IpfsCatRequest String
     | IpfsCat String
+    | Error String
     | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        IpfsListRequest hash ->
+            model ! [ Ports.ipfsList hash ]
+
         IpfsList (Ok result) ->
-            { model | objects = Just result } ! []
+            { model | objects = Just result, view = List } ! []
+
+        IpfsList (Err error) ->
+            { model | errors = error :: model.errors } ! []
 
         IpfsCatRequest hash ->
             model ! [ Ports.ipfsCat hash ]
@@ -69,20 +82,25 @@ update msg model =
         IpfsCat data ->
             { model | data = Just data, view = Single } ! []
 
-        _ ->
+        Error error ->
+            { model | errors = error :: model.errors } ! []
+
+        NoOp ->
             model ! []
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ Ports.ipfsListData (decodeIpfsList >> IpfsList)
+        [ Ports.error Error
+        , Ports.ipfsListData (decodeIpfsList >> IpfsList)
         , Ports.ipfsCatData IpfsCat
         ]
 
 
 type Style
     = None
+    | ErrorMessage
     | Header
 
 
@@ -90,6 +108,7 @@ styleSheet : StyleSheet Style variation
 styleSheet =
     Style.styleSheet
         [ style None []
+        , style ErrorMessage [ Color.text Color.red ]
         , style Header [ Font.size 30 ]
         ]
 
@@ -101,7 +120,7 @@ objectOnClick object =
             onClick <| IpfsCatRequest object.path
 
         Directory ->
-            onClick NoOp
+            onClick <| IpfsListRequest object.path
 
 
 view : Model -> Html Msg
@@ -109,7 +128,10 @@ view model =
     Element.viewport styleSheet <|
         column None
             []
-            [ h3 Header [] <| text <| viewHeader model.org model.repo
+            [ when (not <| List.isEmpty model.errors) <|
+                column None [] <|
+                    (flip List.map) model.errors (\err -> el ErrorMessage [] <| text err)
+            , h3 Header [] <| text <| viewHeader model.org model.repo
             , case model.view of
                 List ->
                     column None [] <|

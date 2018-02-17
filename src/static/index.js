@@ -10,10 +10,14 @@ var app = Elm.Main.embed( document.getElementById( 'main' ) );
 // initialize ipfs
 var ipfs = ipfsAPI({ host: 'localhost', port: '5001', protocol: 'http' });
 
+function error(hash, error) {
+    return hash + " " + error;
+}
+
 app.ports.ipfsList.subscribe(function (hash) {
     ipfs.ls(hash, function (err, objs) {
         if (err) {
-            console.error(hash, err);
+            app.ports.error.send(error(hash, err));
             return;
         }
 
@@ -24,7 +28,7 @@ app.ports.ipfsList.subscribe(function (hash) {
 app.ports.ipfsCat.subscribe(function (hash) {
     ipfs.files.cat(hash, function (err, file) {
         if (err) {
-            console.error(hash, err);
+            app.ports.error.send(error(hash, err));
             return;
         }
 
