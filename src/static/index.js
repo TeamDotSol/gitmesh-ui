@@ -20,3 +20,14 @@ app.ports.ipfsList.subscribe(function (hash) {
         app.ports.ipfsListData.send(objs);
     })
 });
+
+app.ports.ipfsCat.subscribe(function (hash) {
+    ipfs.files.cat(hash, function (err, file) {
+        if (err) {
+            console.error(hash, err);
+            return;
+        }
+
+        app.ports.ipfsCatData.send(file.toString('utf8'));
+    })
+});

@@ -1,11 +1,15 @@
 module Main exposing (..)
 
+import Data.Ipfs exposing (..)
 import Element exposing (..)
+import Element.Attributes exposing (..)
+import Element.Events exposing (..)
 import Html exposing (Html)
 import Json.Decode as Decode
 import Ports
 import Style exposing (..)
 import Style.Border as Border
+import Style.Font as Font
 
 
 main : Program Never Model Msg
@@ -19,98 +23,114 @@ main =
 
 
 type alias Model =
-    { ipfsHash : Maybe String
-    , data : Maybe (List IpfsObject)
+    { org : String
+    , repo : String
+    , objects : Maybe (List IpfsObject)
+    , data : Maybe String
+    , view : View
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { ipfsHash = Nothing
+    ( { org = "team.sol"
+      , repo = "example"
+      , objects = Nothing
       , data = Nothing
+      , view = List
       }
     , Cmd.batch
-        [ Ports.ipfsList "QmaQZJXMyAcakZrgEmAKdwpMa5V9uzNL1vwZnchUHzbSR5"
+        [ Ports.ipfsList "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i"
         ]
     )
 
 
-type IpfsType
-    = File
-    | Directory
-
-
-type alias IpfsObject =
-    { depth : Int
-    , name : String
-    , path : String
-    , size : Int
-    , hash : String
-    , nodeType : IpfsType
-    }
+type View
+    = Single
+    | List
 
 
 type Msg
     = IpfsList (Result String (List IpfsObject))
+    | IpfsCatRequest String
+    | IpfsCat String
+    | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         IpfsList (Ok result) ->
-            { model | data = Just result } ! []
+            { model | objects = Just result } ! []
+
+        IpfsCatRequest hash ->
+            model ! [ Ports.ipfsCat hash ]
+
+        IpfsCat data ->
+            { model | data = Just data, view = Single } ! []
 
         _ ->
             model ! []
 
 
-decodeIpfsObject : Decode.Decoder IpfsObject
-decodeIpfsObject =
-    let
-        decodeType : String -> Decode.Decoder IpfsType
-        decodeType raw =
-            case raw of
-                "file" ->
-                    Decode.succeed File
-
-                "dir" ->
-                    Decode.succeed Directory
-
-                _ ->
-                    Decode.fail "unknown ipfs object type"
-    in
-        Decode.map6 IpfsObject
-            (Decode.field "depth" Decode.int)
-            (Decode.field "name" Decode.string)
-            (Decode.field "path" Decode.string)
-            (Decode.field "size" Decode.int)
-            (Decode.field "hash" Decode.string)
-            (Decode.field "type" (Decode.string |> Decode.andThen decodeType))
-
-
-decodeListResult : Decode.Value -> Result String (List IpfsObject)
-decodeListResult =
-    Decode.decodeValue <| Decode.list decodeIpfsObject
-
-
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Ports.ipfsListData (decodeListResult >> IpfsList)
+    Sub.batch
+        [ Ports.ipfsListData (decodeIpfsList >> IpfsList)
+        , Ports.ipfsCatData IpfsCat
+        ]
 
 
 type Style
-    = View
+    = None
+    | Header
 
 
 styleSheet : StyleSheet Style variation
 styleSheet =
     Style.styleSheet
-        [ style View [ Border.all 1.0, Border.solid ]
+        [ style None []
+        , style Header [ Font.size 30 ]
         ]
+
+
+objectOnClick : IpfsObject -> Attribute variation Msg
+objectOnClick object =
+    case object.nodeType of
+        File ->
+            onClick <| IpfsCatRequest object.path
+
+        Directory ->
+            onClick NoOp
 
 
 view : Model -> Html Msg
 view model =
     Element.viewport styleSheet <|
-        el View [] <|
-            text (toString model)
+        column None
+            []
+            [ h3 Header [] <| text <| viewHeader model.org model.repo
+            , case model.view of
+                List ->
+                    column None [] <|
+                        (flip List.map) (withDefaultList model.objects)
+                            (\object -> el None [ objectOnClick object ] <| text object.path)
+
+                Single ->
+                    text <| withDefaultString model.data
+            ]
+
+
+viewHeader : String -> String -> String
+viewHeader org repo =
+    org ++ " / " ++ repo
+
+
+withDefaultList : Maybe (List a) -> List a
+withDefaultList =
+    Maybe.withDefault []
+
+
+withDefaultString : Maybe String -> String
+withDefaultString =
+    Maybe.withDefault ""
