@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+
+</body>
+</html>
+
+<script src="https://cdn.rawgit.com/ethereum/web3.js/develop/dist/web3.js"></script>
+<script type="text/javascript">
+
+	const contractByteCode = '60606040526009600055341561001457600080fd5b60d4806100226000396000f3006060604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680632cb777a614604e578063db51e74c146074575b600080fd5b3415605857600080fd5b605e6094565b6040518082815260200191505060405180910390f35b3415607e57600080fd5b60926004808035906020019091905050609a565b005b60005481565b8060005401600081905550505600a165627a7a72305820ea2aa1bf2ef3d36fabd78c78e8ee7334c5faafd038c56ef252997f7ce4931a410029'
+	const contractAbi = [ { "constant": true, "inputs": [], "name": "myInt", "outputs": [ { "name": "", "type": "int256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": false, "inputs": [ { "name": "_myArg", "type": "int256" } ], "name": "myFunction", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" } ]
+	const contractAddress = '0xAa9805981D1D935853762Cb3cc4091A4459300A0'
+
+	// get value from contract
+	web3.eth.contract(contractAbi).at(contractAddress).myInt.call({}, function(err, data){
+		if (err){console.error(err)}
+		console.log('data', data.toString())
+	})
+
+	// pass stuff into function
+    web3.eth.contract(contractAbi).at(contractAddress).myFunction(333,
+        {
+            from: web3.eth.accounts[0],
+            data: contractByteCode,
+            value: 0
+        }, function(err, data) {
+            if (err){return}
+            console.log(data)
+        })
+</script>
