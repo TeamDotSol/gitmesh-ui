@@ -1,11 +1,12 @@
 module Main exposing (..)
 
-import Color
+import Color exposing (rgb)
 import Data.Ipfs exposing (..)
 import Element exposing (..)
 import Element.Attributes exposing (..)
 import Element.Events exposing (..)
-import Html exposing (Html)
+import Html exposing (Html, pre)
+import Html.Attributes
 import Json.Decode as Decode
 import Ports
 import Style exposing (..)
@@ -108,6 +109,8 @@ type Style
     = None
     | ErrorMessage
     | Header
+    | Container
+    | ListItem
 
 
 styleSheet : StyleSheet Style variation
@@ -116,6 +119,14 @@ styleSheet =
         [ style None []
         , style ErrorMessage [ Color.text Color.red ]
         , style Header [ Font.size 30 ]
+        , style Container
+            [ Border.all 1.0
+            , Border.solid
+            , Border.rounded 5.0
+            , Color.border Color.gray
+            ]
+        , style ListItem
+            [ hover [ Color.background <| rgb 248 248 248 ] ]
         ]
 
 
@@ -133,27 +144,55 @@ view : Model -> Html Msg
 view model =
     Element.viewport styleSheet <|
         column None
-            []
-            [ when (not <| List.isEmpty model.errors) <|
-                column None [] <|
-                    (flip List.map) model.errors (\err -> el ErrorMessage [] <| text err)
-            , h3 Header [] <| text <| viewHeader model.org model.repo
-            , viewPath model.currentPath
-            , case model.view of
-                List ->
+            [ width fill, height fill, center ]
+            [ column None
+                [ width <| px 1000, spacing 20 ]
+                [ when (not <| List.isEmpty model.errors) <|
                     column None [] <|
-                        (flip List.map) (withDefaultList model.objects)
-                            (\object -> el None [ objectOnClick object ] <| text object.name)
+                        (flip List.map) model.errors (\err -> el ErrorMessage [] <| text err)
+                , h3 Header [ paddingTop 20 ] <| text <| viewHeader model.org model.repo
+                , viewPath model.currentPath
+                , case model.view of
+                    List ->
+                        column Container [] <|
+                            (flip List.map) (withDefaultList model.objects)
+                                (\object ->
+                                    el ListItem [ objectOnClick object, paddingXY 20 10 ] <|
+                                        row None
+                                            [ spacing 10, verticalCenter ]
+                                            [ viewIcon object.nodeType
+                                            , text object.name
+                                            ]
+                                )
 
-                Single ->
-                    text <| withDefaultString model.content
+                    Single ->
+                        column Container
+                            [ padding 10 ]
+                            [ html <|
+                                pre []
+                                    [ Html.text <| withDefaultString model.content
+                                    ]
+                            ]
+                ]
             ]
+
+
+viewIcon : IpfsType -> Element Style variation Msg
+viewIcon t =
+    case t of
+        File ->
+            html <| Html.i [ Html.Attributes.class "far fa-file-alt" ] []
+
+        Directory ->
+            html <| Html.i [ Html.Attributes.class "far fa-folder" ] []
 
 
 viewPath : List String -> Element Style variation Msg
 viewPath path =
     row None [] <|
-        (List.map (\p -> text p) path
+        (path
+            |> ((::) "ipfs")
+            |> List.map (\p -> text p)
             |> List.intersperse (text " > ")
         )
 
