@@ -7,8 +7,9 @@ import Element.Attributes exposing (..)
 import Element.Events exposing (..)
 import Html exposing (Html, pre)
 import Html.Attributes
-import Json.Decode as Decode
+import Navigation exposing (Location)
 import Ports
+import Routing exposing (..)
 import Style exposing (..)
 import Style.Border as Border
 import Style.Color as Color
@@ -17,7 +18,7 @@ import Style.Font as Font
 
 main : Program Never Model Msg
 main =
-    Html.program
+    Navigation.program LocationChange
         { init = init
         , view = view
         , update = update
@@ -27,27 +28,34 @@ main =
 
 type alias Model =
     { errors : List String
+    , route : Route
+    , view : View
     , org : String
     , repo : String
     , currentPath : List String
     , objects : Maybe (List IpfsObject)
     , content : Maybe String
-    , view : View
     }
 
 
-init : ( Model, Cmd Msg )
-init =
+rootHash : String
+rootHash =
+    "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i"
+
+
+init : Location -> ( Model, Cmd Msg )
+init location =
     ( { errors = []
+      , route = parseLocation location
       , org = "team.sol"
       , repo = "example"
-      , currentPath = [ "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i" ]
+      , currentPath = [ rootHash ]
       , objects = Nothing
       , content = Nothing
       , view = List
       }
     , Cmd.batch
-        [ Ports.ipfsList "QmSiLq2wVRyioJ8eBzyUL9UBzRYPia2hNGPDUnzgMin24i" ]
+        [ Ports.ipfsList rootHash ]
     )
 
 
@@ -62,6 +70,7 @@ type Msg
     | IpfsCatRequest String
     | IpfsCat String
     | Error String
+    | LocationChange Location
     | NoOp
 
 
@@ -86,6 +95,18 @@ update msg model =
 
         Error error ->
             { model | errors = error :: model.errors } ! []
+
+        LocationChange location ->
+            let
+                route =
+                    parseLocation location
+            in
+                case route of
+                    RepoRoute org repo ->
+                        { model | route = route, org = org, repo = repo } ! []
+
+                    NotFoundRoute ->
+                        { model | route = route } ! []
 
         NoOp ->
             model ! []
@@ -142,39 +163,47 @@ objectOnClick object =
 
 view : Model -> Html Msg
 view model =
-    Element.viewport styleSheet <|
-        column None
-            [ width fill, height fill, center ]
-            [ column None
-                [ width <| px 1000, spacing 20 ]
-                [ when (not <| List.isEmpty model.errors) <|
-                    column None [] <|
-                        (flip List.map) model.errors (\err -> el ErrorMessage [] <| text err)
-                , h3 Header [ paddingTop 20 ] <| text <| viewHeader model.org model.repo
-                , viewPath model.currentPath
-                , case model.view of
-                    List ->
-                        column Container [] <|
-                            (flip List.map) (withDefaultList model.objects)
-                                (\object ->
-                                    el ListItem [ objectOnClick object, paddingXY 20 10 ] <|
-                                        row None
-                                            [ spacing 10, verticalCenter ]
-                                            [ viewIcon object.nodeType
-                                            , text object.name
-                                            ]
-                                )
+    case model.route of
+        NotFoundRoute ->
+            Element.viewport styleSheet <|
+                column None
+                    []
+                    [ text "404" ]
 
-                    Single ->
-                        column Container
-                            [ padding 10 ]
-                            [ html <|
-                                pre []
-                                    [ Html.text <| withDefaultString model.content
+        RepoRoute org repo ->
+            Element.viewport styleSheet <|
+                column None
+                    [ width fill, height fill, center ]
+                    [ column None
+                        [ width <| px 1000, spacing 20 ]
+                        [ when (not <| List.isEmpty model.errors) <|
+                            column None [] <|
+                                (flip List.map) model.errors (\err -> el ErrorMessage [] <| text err)
+                        , h3 Header [ paddingTop 20 ] <| text <| viewHeader org repo
+                        , viewPath model.currentPath
+                        , case model.view of
+                            List ->
+                                column Container [] <|
+                                    (flip List.map) (withDefaultList model.objects)
+                                        (\object ->
+                                            el ListItem [ objectOnClick object, paddingXY 20 10 ] <|
+                                                row None
+                                                    [ spacing 10, verticalCenter ]
+                                                    [ viewIcon object.nodeType
+                                                    , text object.name
+                                                    ]
+                                        )
+
+                            Single ->
+                                column Container
+                                    [ padding 10 ]
+                                    [ html <|
+                                        pre []
+                                            [ Html.text <| withDefaultString model.content
+                                            ]
                                     ]
-                            ]
-                ]
-            ]
+                        ]
+                    ]
 
 
 viewIcon : IpfsType -> Element Style variation Msg
